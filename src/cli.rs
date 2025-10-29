@@ -90,7 +90,7 @@ pub async fn handle_commands(command: &Commands) -> Result<(), Error> {
             let conf = crate::config::load_config(config_file.as_deref())?;
             tracing::info!("Configuration: {:?}", conf);
             let server_handle = start_dns_server(conf);
-            server_handle.join().expect("DNS server thread panicked")?;
+            server_handle.join().map_err(|e| eyre::eyre!("DNS server thread panicked: {:?}", e))??;
         }
     }
     Ok(())

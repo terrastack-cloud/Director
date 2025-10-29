@@ -1,7 +1,11 @@
 use core::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use hickory_server::ServerFuture;
+
+use rustls::ServerConfig;
+use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -9,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::config::Config;
 use crate::dns::error::DnsError;
 use crate::dns::server::Handler;
+use crate::dns::tls::DynamicCertResolver;
 
 pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), DnsError>> {
     std::thread::spawn(move || {
@@ -26,7 +31,7 @@ pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), Dn
             tokio::spawn(async move {
                 tokio::signal::ctrl_c()
                     .await
-                    .expect("Failed to listen for Ctrl+C");
+                    .unwrap_or_else(|e| tracing::error!("Failed to listen for Ctrl+C: {}", e));
                 tracing::info!("Ctrl+C received, shutting down...");
                 ctrl_c_cancel_token.cancel();
             });
@@ -97,7 +102,7 @@ pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), Dn
                 }
             }));
 
-            // HTTP Server (Placeholder)
+            // HTTP Server (DoH)
             let http_addr: SocketAddr = match config.listen.http.parse() {
                 Ok(addr) => addr,
                 Err(e) => {
@@ -108,15 +113,47 @@ pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), Dn
                 }
             };
             let http_cancel_token = cancel_token.clone();
+            let http_handler = handler.clone();
+            let http_config = config.clone();
             tasks.push(tokio::spawn(async move {
                 tracing::info!("Listening for HTTP on {}", http_addr);
-                // TODO: Implement actual HTTP server
-                http_cancel_token.cancelled().await;
-                tracing::info!("HTTP server shutting down.");
-                Ok(())
+
+                if let Some(tls_cert_config) = http_config.tls_cert_config {
+                    let resolver_config = Arc::new(DynamicCertResolver { tls_cert_config });
+
+                    let mut server = ServerFuture::new(http_handler);
+                    if let Err(e) = TcpListener::bind(http_addr).await.map(|tcp_listener| {
+                        server.register_https_listener(
+                            tcp_listener,
+                            Duration::from_secs(10),
+                            resolver_config,
+                            None, // endpoint_name, not used in director
+                            http_config
+                                .https_endpoint
+                                .unwrap_or_else(|| "/dns-query".to_string()),
+                        )
+                    }) {
+                        return Err(DnsError::TcpSocketBind(http_addr.to_string(), e));
+                    }
+                    tracing::info!("Listening for HTTPS DNS on {}", http_addr);
+
+                    tokio::select! {
+                        _ = http_cancel_token.cancelled() => {
+                            tracing::info!("HTTPS server shutting down.");
+                            Ok(())
+                        }
+                        result = server.block_until_done() => {
+                            result.map_err(|e| DnsError::DnsServer(e.to_string()))
+                        }
+                    }
+                } else {
+                    tracing::info!("HTTPS server disabled: no TLS certificate configured.");
+                    http_cancel_token.cancelled().await;
+                    Ok(())
+                }
             }));
 
-            // TLS Server (Placeholder)
+            // TLS Server (DoT)
             let tls_addr: SocketAddr = match config.listen.tls.parse() {
                 Ok(addr) => addr,
                 Err(e) => {
@@ -127,12 +164,43 @@ pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), Dn
                 }
             };
             let tls_cancel_token = cancel_token.clone();
+            let tls_handler = handler.clone();
+            let tls_config = config.clone();
             tasks.push(tokio::spawn(async move {
                 tracing::info!("Listening for TLS on {}", tls_addr);
-                // TODO: Implement actual TLS server
-                tls_cancel_token.cancelled().await;
-                tracing::info!("TLS server shutting down.");
-                Ok(())
+
+                if let Some(tls_cert_config) = tls_config.tls_cert_config {
+                    let resolver_config = Arc::new(DynamicCertResolver { tls_cert_config });
+                    let tls_config = ServerConfig::builder()
+                        .with_no_client_auth()
+                        .with_cert_resolver(resolver_config);
+
+                    let mut server = ServerFuture::new(tls_handler);
+                    if let Err(e) = TcpListener::bind(tls_addr).await.map(|tcp_listener| {
+                        server.register_tls_listener_with_tls_config(
+                            tcp_listener,
+                            Duration::from_secs(10),
+                            Arc::new(tls_config),
+                        )
+                    }) {
+                        return Err(DnsError::TcpSocketBind(tls_addr.to_string(), e));
+                    }
+                    tracing::info!("Listening for TLS DNS on {}", tls_addr);
+
+                    tokio::select! {
+                        _ = tls_cancel_token.cancelled() => {
+                            tracing::info!("TLS server shutting down.");
+                            Ok(())
+                        }
+                        result = server.block_until_done() => {
+                            result.map_err(|e| DnsError::DnsServer(e.to_string()))
+                        }
+                    }
+                } else {
+                    tracing::info!("TLS server disabled: no TLS certificate configured.");
+                    tls_cancel_token.cancelled().await;
+                    Ok(())
+                }
             }));
 
             for task in tasks {

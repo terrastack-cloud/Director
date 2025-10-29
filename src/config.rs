@@ -10,6 +10,14 @@ pub struct Config {
     pub listen: Listen,
     pub upstreams: Vec<String>,
     pub cache: Cache,
+    pub tls_cert_config: Option<TlsCertConfig>,
+    pub https_endpoint: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+pub struct TlsCertConfig {
+    pub cert_path: String,
+    pub key_path: String,
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
@@ -32,6 +40,8 @@ impl Default for Config {
             listen: Listen::default(),
             upstreams: vec!["1.1.1.1:5353".to_string(), "8.8.8.8:53".to_string()],
             cache: Cache::default(),
+            tls_cert_config: None,
+            https_endpoint: Some(String::from("dns-query")),
         }
     }
 }
