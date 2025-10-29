@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::dns::spawn::start_dns_server;
 use clap::builder::Styles;
 use clap::{ColorChoice, Parser, Subcommand};
 use eyre::{Error, Result};
@@ -30,7 +31,7 @@ pub enum ConfigFormat {
     Toml,
 }
 
-pub fn handle_commands(command: &Commands) -> Result<(), Error> {
+pub async fn handle_commands(command: &Commands) -> Result<(), Error> {
     match command {
         Commands::Generate { format } => {
             let default_config = Config::default();
@@ -39,8 +40,23 @@ pub fn handle_commands(command: &Commands) -> Result<(), Error> {
                     let mut env_output = String::new();
                     writeln!(
                         &mut env_output,
-                        "DIRECTOR_LISTEN={}",
-                        default_config.listen
+                        "DIRECTOR_LISTEN_HTTP={}",
+                        default_config.listen.http
+                    )?;
+                    writeln!(
+                        &mut env_output,
+                        "DIRECTOR_LISTEN_UDP={}",
+                        default_config.listen.udp
+                    )?;
+                    writeln!(
+                        &mut env_output,
+                        "DIRECTOR_LISTEN_TCP={}",
+                        default_config.listen.tcp
+                    )?;
+                    writeln!(
+                        &mut env_output,
+                        "DIRECTOR_LISTEN_TLS={}",
+                        default_config.listen.tls
                     )?;
                     writeln!(
                         &mut env_output,
@@ -70,12 +86,11 @@ pub fn handle_commands(command: &Commands) -> Result<(), Error> {
             }
         }
         Commands::Run { config_file } => {
-            tracing::info!(
-                "Running director with config file: {:?}",
-                config_file
-            );
+            tracing::info!("Running director with config file: {:?}", config_file);
             let conf = crate::config::load_config(config_file.as_deref())?;
             tracing::info!("Configuration: {:?}", conf);
+            let server_handle = start_dns_server(conf);
+            server_handle.join().expect("DNS server thread panicked")?;
         }
     }
     Ok(())

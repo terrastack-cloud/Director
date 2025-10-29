@@ -5,14 +5,22 @@ use figment::{
 };
 use std::path::Path;
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 pub struct Config {
-    pub listen: String,
+    pub listen: Listen,
     pub upstreams: Vec<String>,
     pub cache: Cache,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+pub struct Listen {
+    pub http: String,
+    pub udp: String,
+    pub tcp: String,
+    pub tls: String,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 pub struct Cache {
     pub enabled: bool,
     pub ttl: u16,
@@ -21,12 +29,20 @@ pub struct Cache {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            listen: "https://127.0.0.1:443".to_string(),
-            upstreams: vec![
-                "tcp://1.1.1.1".to_string(),
-                "udp://8.8.8.8".to_string(),
-            ],
+            listen: Listen::default(),
+            upstreams: vec!["1.1.1.1:5353".to_string(), "8.8.8.8:53".to_string()],
             cache: Cache::default(),
+        }
+    }
+}
+
+impl Default for Listen {
+    fn default() -> Self {
+        Listen {
+            http: "0.0.0.0:8080".to_string(),
+            udp: "0.0.0.0:8081".to_string(),
+            tcp: "0.0.0.0:8082".to_string(),
+            tls: "0.0.0.0:8083".to_string(),
         }
     }
 }
