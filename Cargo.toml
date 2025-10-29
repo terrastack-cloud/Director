@@ -1,0 +1,29 @@
+[package]
+name = "director"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+# Error handling and reporting
+color-eyre = "0.6.5" # Human-friendly error reports
+eyre = "0.6.12"      # Flexible error reporting
+
+# Configuration management
+figment = { version = "0.10.19", features = [
+    "env",
+    "yaml",
+    "toml",
+] } # Config abstraction library
+serde = { version = "1.0.228", features = ["derive"] } # Serialization framework
+toml = "0.9.8" # TOML serialization
+serde_yaml = "0.9.34" # YAML serialization
+
+# Command-line argument parsing
+clap = { version = "4.5.50", features = [
+    "derive",
+    "color",
+] } # CLI argument parser
+
+# Logging
+tracing = "0.1.41"            # Application tracing
+tracing-subscriber = "0.3.20" # Tracing subscriber for console output

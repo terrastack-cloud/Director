@@ -1,0 +1,7 @@
+listen: https://127.0.0.1:443
+upstreams:
+  - tcp://1.1.1.1
+  - udp://8.8.8.8
+cache:
+  ttl: 300
+  enabled: false
