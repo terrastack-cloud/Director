@@ -114,15 +114,22 @@ impl RequestHandler for Handler {
                 message.set_response_code(ResponseCode::ServFail);
             }
         }
-        response_handle
-            .send_response(response.build(
-                *message.header(),
-                message.answers(),
-                message.name_servers(),
-                message.name_servers(),
-                message.additionals(),
-            ))
-            .await
-            .unwrap()
+        let response_message = response.build(
+            *message.header(),
+            message.answers(),
+            message.name_servers(),
+            message.name_servers(),
+            message.additionals(),
+        );
+
+        match response_handle.send_response(response_message).await {
+            Ok(response_info) => response_info,
+            Err(e) => {
+                tracing::error!("Error sending response to {}: {}", request.src(), e);
+                let mut header = *request.header();
+                header.set_response_code(ResponseCode::ServFail);
+                ResponseInfo::from(header)
+            }
+        }
     }
 }

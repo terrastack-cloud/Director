@@ -12,4 +12,6 @@ pub enum DnsError {
     TcpSocketBind(String, std::io::Error),
     #[error("DNS server error: {0}")]
     DnsServer(String),
+    #[error("TLS configuration error: {0}")]
+    TlsConfig(String),
 }

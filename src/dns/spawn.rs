@@ -4,15 +4,14 @@ use std::time::Duration;
 
 use hickory_server::ServerFuture;
 
+use crate::config::Config;
+use crate::dns::error::DnsError;
+use crate::dns::server::Handler;
+use crate::dns::tls::{DynamicCertResolver, tls_server_config};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-
-use crate::config::Config;
-use crate::dns::error::DnsError;
-use crate::dns::server::Handler;
-use crate::dns::tls::DynamicCertResolver;
 
 pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), DnsError>> {
     std::thread::spawn(move || {
@@ -119,7 +118,6 @@ pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), Dn
 
                 if let Some(tls_cert_config) = http_config.tls_cert_config {
                     let resolver_config = Arc::new(DynamicCertResolver::new(tls_cert_config));
-
                     let mut server = ServerFuture::new(http_handler);
                     if let Err(e) = TcpListener::bind(http_addr).await.map(|tcp_listener| {
                         server.register_https_listener(
@@ -170,13 +168,14 @@ pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), Dn
 
                 if let Some(tls_cert_config) = tls_config.tls_cert_config {
                     let resolver_config = Arc::new(DynamicCertResolver::new(tls_cert_config));
-
+                    let serv_conf = tls_server_config(b"dot", resolver_config)
+                        .map_err(|e| DnsError::TlsConfig(e.to_string()))?;
                     let mut server = ServerFuture::new(tls_handler);
                     if let Err(e) = TcpListener::bind(tls_addr).await.map(|tcp_listener| {
-                        server.register_tls_listener(
+                        server.register_tls_listener_with_tls_config(
                             tcp_listener,
                             Duration::from_secs(30),
-                            resolver_config,
+                            Arc::new(serv_conf),
                         )
                     }) {
                         return Err(DnsError::TcpSocketBind(tls_addr.to_string(), e));
