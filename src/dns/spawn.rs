@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use hickory_server::ServerFuture;
 
-use rustls::ServerConfig;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
@@ -125,7 +124,7 @@ pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), Dn
                     if let Err(e) = TcpListener::bind(http_addr).await.map(|tcp_listener| {
                         server.register_https_listener(
                             tcp_listener,
-                            Duration::from_secs(10),
+                            Duration::from_secs(30),
                             resolver_config,
                             None, // endpoint_name, not used in director
                             http_config
@@ -171,16 +170,13 @@ pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), Dn
 
                 if let Some(tls_cert_config) = tls_config.tls_cert_config {
                     let resolver_config = Arc::new(DynamicCertResolver::new(tls_cert_config));
-                    let tls_config = ServerConfig::builder()
-                        .with_no_client_auth()
-                        .with_cert_resolver(resolver_config);
 
                     let mut server = ServerFuture::new(tls_handler);
                     if let Err(e) = TcpListener::bind(tls_addr).await.map(|tcp_listener| {
-                        server.register_tls_listener_with_tls_config(
+                        server.register_tls_listener(
                             tcp_listener,
-                            Duration::from_secs(10),
-                            Arc::new(tls_config),
+                            Duration::from_secs(30),
+                            resolver_config,
                         )
                     }) {
                         return Err(DnsError::TcpSocketBind(tls_addr.to_string(), e));
