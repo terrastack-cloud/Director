@@ -15,7 +15,9 @@ async fn main() -> Result<(), Error> {
     println!();
     color_eyre::install()?;
     tracing_subscriber::fmt::init();
-    rustls::crypto::ring::default_provider().install_default().map_err(|e| eyre::eyre!("Failed to install rustls crypto provider: {:?}", e))?;
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .map_err(|e| eyre::eyre!("Failed to install rustls crypto provider: {:?}", e))?;
 
     let cli = cli::Cli::parse();
     cli::handle_commands(&cli.command).await?;

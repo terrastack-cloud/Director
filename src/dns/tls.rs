@@ -38,7 +38,11 @@ impl ResolvesServerCert for DynamicCertResolver {
         let cert = match RustlsCert::from_pem_file(cert_path) {
             Ok(c) => vec![c],
             Err(e) => {
-                tracing::error!("Failed to parse certificate from {}: {}", cert_path.display(), e);
+                tracing::error!(
+                    "Failed to parse certificate from {}: {}",
+                    cert_path.display(),
+                    e
+                );
                 return None;
             }
         };
@@ -51,7 +55,7 @@ impl ResolvesServerCert for DynamicCertResolver {
             }
         };
 
-        let signature_alg = match rustls::crypto::ring::sign::any_supported_type(&key) {
+        let signature_alg = match rustls::crypto::aws_lc_rs::sign::any_supported_type(&key) {
             Ok(alg) => alg,
             Err(e) => {
                 tracing::error!("Failed to get key type for {}: {}", key_path.display(), e);
@@ -61,7 +65,10 @@ impl ResolvesServerCert for DynamicCertResolver {
 
         let ck = Arc::new(CertifiedKey::new(cert, signature_alg));
 
-        self.cache.write().unwrap().insert(domain.clone(), Arc::clone(&ck));
+        self.cache
+            .write()
+            .unwrap()
+            .insert(domain.clone(), Arc::clone(&ck));
         tracing::debug!("Stored certificate for {} in cache", domain);
 
         Some(ck)
