@@ -119,7 +119,7 @@ pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), Dn
                 tracing::info!("Listening for HTTP on {}", http_addr);
 
                 if let Some(tls_cert_config) = http_config.tls_cert_config {
-                    let resolver_config = Arc::new(DynamicCertResolver { tls_cert_config });
+                    let resolver_config = Arc::new(DynamicCertResolver::new(tls_cert_config));
 
                     let mut server = ServerFuture::new(http_handler);
                     if let Err(e) = TcpListener::bind(http_addr).await.map(|tcp_listener| {
@@ -170,7 +170,7 @@ pub fn start_dns_server(config: Config) -> std::thread::JoinHandle<Result<(), Dn
                 tracing::info!("Listening for TLS on {}", tls_addr);
 
                 if let Some(tls_cert_config) = tls_config.tls_cert_config {
-                    let resolver_config = Arc::new(DynamicCertResolver { tls_cert_config });
+                    let resolver_config = Arc::new(DynamicCertResolver::new(tls_cert_config));
                     let tls_config = ServerConfig::builder()
                         .with_no_client_auth()
                         .with_cert_resolver(resolver_config);
