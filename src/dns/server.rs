@@ -1,5 +1,7 @@
 use async_trait::async_trait;
-use hickory_proto::op::{Message, MessageType, OpCode, ResponseCode};
+use hickory_proto::{
+    op::{Message, MessageType, OpCode, ResponseCode},
+};
 use hickory_server::{
     authority::MessageResponseBuilder,
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
@@ -118,7 +120,7 @@ impl RequestHandler for Handler {
             *message.header(),
             message.answers(),
             message.name_servers(),
-            message.name_servers(),
+            [],
             message.additionals(),
         );
 
