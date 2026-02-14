@@ -1,7 +1,7 @@
+use rustls::ServerConfig;
 use rustls::crypto::aws_lc_rs::default_provider;
 use rustls::server::{ClientHello, ResolvesServerCert};
 use rustls::sign::CertifiedKey;
-use rustls::ServerConfig;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
@@ -27,7 +27,13 @@ impl DynamicCertResolver {
 
 impl ResolvesServerCert for DynamicCertResolver {
     fn resolve(&self, hello: ClientHello) -> Option<Arc<CertifiedKey>> {
-        let domain = hello.server_name()?.to_string();
+        let domain = match hello.server_name() {
+            Some(name) => name.to_string(),
+            None => {
+                tracing::warn!("No SNI provided, serving default certificate");
+                "default".to_string()
+            }
+        };
 
         // Check cache first
         if let Some(cached_key) = self.cache.read().unwrap().get(&domain) {
